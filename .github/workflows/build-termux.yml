@@ -17,15 +17,18 @@ jobs:
       - name: Add musl target
         run: rustup target add aarch64-unknown-linux-musl
 
-      - name: Install cross-compilation tools
+      - name: Install system dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends musl-tools
-          
-          wget -q https://musl.cc/aarch64-linux-musl-cross.tgz
-          tar -xzf aarch64-linux-musl-cross.tgz
+
+      - name: Download musl cross compiler
+        run: |
+          curl -fsSL https://musl.cc/aarch64-linux-musl-cross.tgz -o musl-cross.tgz || \
+          curl -fsSL https://more.musl.cc/11.2.1/x86_64-linux-musl/aarch64-linux-musl-cross.tgz -o musl-cross.tgz
+          tar -xzf musl-cross.tgz
           echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
 
       - name: Configure Cargo
@@ -54,16 +57,9 @@ jobs:
             --target aarch64-unknown-linux-musl \
             -p codex-tui
 
-      - name: Prepare artifact
-        run: |
-          mkdir -p release
-          cp codex-rs/target/aarch64-unknown-linux-musl/release/codex-tui release/
-          ls -lh release/
-          file release/codex-tui
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: codex-tui-aarch64-musl
-          path: release/codex-tui
+          path: codex-rs/target/aarch64-unknown-linux-musl/release/codex-tui
           compression-level: 9
