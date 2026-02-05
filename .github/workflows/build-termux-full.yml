@@ -1,0 +1,60 @@
+name: Build Full Project (aarch64-musl)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Configure Cargo
+        run: |
+          mkdir -p .cargo
+          cat > .cargo/config.toml << 'EOF'
+          [profile.release]
+          lto = "thin"
+          opt-level = 3
+          codegen-units = 1
+          strip = true
+          EOF
+
+      - name: Build full workspace
+        working-directory: codex-rs
+        run: |
+          cross build --release \
+            --target aarch64-unknown-linux-musl \
+            --workspace \
+            --exclude codex-network-proxy
+
+      - name: Collect binaries
+        run: |
+          mkdir -p release
+          cd codex-rs/target/aarch64-unknown-linux-musl/release
+          
+          # 复制所有可执行文件
+          for bin in codex codex-tui codex-exec codex-mcp-server codex-linux-sandbox; do
+            if [ -f "$bin" ]; then
+              cp "$bin" ../../../../release/
+              echo "Found: $bin"
+            fi
+          done
+          
+          # 显示结果
+          ls -lh ../../../../release/
+
+      - name: Upload all binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-full-aarch64-musl
+          path: release/
+          compression-level: 9
