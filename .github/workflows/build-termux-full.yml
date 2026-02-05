@@ -6,16 +6,48 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          df -h
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cross
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cross
+          key: cross-${{ runner.os }}
+
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: |
+          if ! command -v cross &> /dev/null; then
+            cargo install cross --git https://github.com/cross-rs/cross
+          fi
+
+      - name: Cache Docker image
+        uses: actions/cache@v4
+        with:
+          path: /tmp/cross-image.tar
+          key: cross-docker-aarch64-musl-v1
+
+      - name: Load/Pull Docker image
+        run: |
+          if [ -f /tmp/cross-image.tar ]; then
+            docker load < /tmp/cross-image.tar
+          else
+            docker pull ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
+            docker save ghcr.io/cross-rs/aarch64-unknown-linux-musl:main > /tmp/cross-image.tar
+          fi
 
       - name: Configure Cargo
         run: |
@@ -28,8 +60,10 @@ jobs:
           strip = true
           EOF
 
-      - name: Build full workspace
+      - name: Build workspace
         working-directory: codex-rs
+        env:
+          CROSS_CONTAINER_OPTS: "--network host"
         run: |
           cross build --release \
             --target aarch64-unknown-linux-musl \
@@ -41,18 +75,16 @@ jobs:
           mkdir -p release
           cd codex-rs/target/aarch64-unknown-linux-musl/release
           
-          # 复制所有可执行文件
           for bin in codex codex-tui codex-exec codex-mcp-server codex-linux-sandbox; do
             if [ -f "$bin" ]; then
               cp "$bin" ../../../../release/
-              echo "Found: $bin"
+              echo "Found: $bin ($(du -h "$bin" | cut -f1))"
             fi
           done
           
-          # 显示结果
           ls -lh ../../../../release/
 
-      - name: Upload all binaries
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: codex-full-aarch64-musl
