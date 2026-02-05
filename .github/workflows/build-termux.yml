@@ -18,9 +18,11 @@ jobs:
         run: rustup target add aarch64-unknown-linux-musl
 
       - name: Install cross-compilation tools
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends musl-tools
           
           wget -q https://musl.cc/aarch64-linux-musl-cross.tgz
           tar -xzf aarch64-linux-musl-cross.tgz
